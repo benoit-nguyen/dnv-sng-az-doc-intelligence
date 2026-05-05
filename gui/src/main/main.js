@@ -47,12 +47,15 @@ const REQUIRED_CONFIG_KEYS = [
   'DOCUMENT_INTELLIGENCE_KEY',
 ];
 
+const DEFAULT_UPDATE_MANIFEST_URL = 'https://raw.githubusercontent.com/dnv-internal/dnv-sng-az-doc-intelligence/main/update-manifest.json';
+const DEFAULT_UPDATE_RELEASES_URL = 'https://github.com/dnv-internal/dnv-sng-az-doc-intelligence/releases/latest';
+
 function getUpdateManifestUrl() {
-  return process.env.DOC_PROCESSOR_UPDATE_MANIFEST_URL || '';
+  return process.env.DOC_PROCESSOR_UPDATE_MANIFEST_URL || DEFAULT_UPDATE_MANIFEST_URL;
 }
 
 function getUpdateReleasesUrl() {
-  return process.env.DOC_PROCESSOR_UPDATE_RELEASES_URL || 'https://github.com/dnv-internal/dnv-sng-az-doc-intelligence/releases/latest';
+  return process.env.DOC_PROCESSOR_UPDATE_RELEASES_URL || DEFAULT_UPDATE_RELEASES_URL;
 }
 
 function parseVersion(version) {
