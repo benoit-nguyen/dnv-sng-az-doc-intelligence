@@ -16,7 +16,7 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "dnv-internal",
+        "owner": "benoit-nguyen",
         "repo": "dnv-sng-az-doc-intelligence"
       }
     ],

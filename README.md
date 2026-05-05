@@ -50,7 +50,7 @@ Local Folder → Azure Blob Storage → Document Intelligence Batch API → Resu
 ### 1. Clone the Repository
 
 ```powershell
-git clone https://github.com/dnv-internal/dnv-sng-az-doc-intelligence.git
+git clone https://github.com/benoit-nguyen/dnv-sng-az-doc-intelligence.git
 cd dnv-sng-az-doc-intelligence
 ```
 

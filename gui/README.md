@@ -81,7 +81,7 @@ The app includes a **Check for Updates** button in the header.
 By default, the button reads the GitHub-hosted manifest at:
 
 ```text
-https://raw.githubusercontent.com/dnv-internal/dnv-sng-az-doc-intelligence/main/update-manifest.json
+https://raw.githubusercontent.com/benoit-nguyen/dnv-sng-az-doc-intelligence/main/update-manifest.json
 ```
 
 If a different update source is needed, host a small JSON manifest at an accessible HTTPS URL and set `DOC_PROCESSOR_UPDATE_MANIFEST_URL` before building the installer. Do not embed private GitHub tokens in the app.

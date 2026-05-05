@@ -12,7 +12,7 @@ Get up and running with the Document Intelligence Batch Processor in minutes.
 ## Step 1: Clone the Repository
 
 ```powershell
-git clone https://github.com/dnv-internal/dnv-sng-az-doc-intelligence.git
+git clone https://github.com/benoit-nguyen/dnv-sng-az-doc-intelligence.git
 cd dnv-sng-az-doc-intelligence
 ```
 

@@ -1,6 +1,6 @@
 {
   "version": "1.0.2",
-  "installerUrl": "https://github.com/dnv-internal/dnv-sng-az-doc-intelligence/releases/download/v1.0.2/Document%20Intelligence%20Processor%20Setup%201.0.2.exe",
-  "releaseNotesUrl": "https://github.com/dnv-internal/dnv-sng-az-doc-intelligence/releases/tag/v1.0.2",
+  "installerUrl": "https://github.com/benoit-nguyen/dnv-sng-az-doc-intelligence/releases/download/v1.0.2/Document%20Intelligence%20Processor%20Setup%201.0.2.exe",
+  "releaseNotesUrl": "https://github.com/benoit-nguyen/dnv-sng-az-doc-intelligence/releases/tag/v1.0.2",
   "notes": "Version 1.0.2 uses the GitHub-hosted update manifest by default and includes the update button, secure local Azure settings, and PDF translation through Document Intelligence layout analysis."
 }
