@@ -1,0 +1,32 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "value": "southeastasia"
+    },
+    "environment": {
+      "value": "dev"
+    },
+    "storageSku": {
+      "value": "Standard_LRS"
+    },
+    "documentIntelligenceSku": {
+      "value": "S0"
+    },
+    "sourceContainerName": {
+      "value": "source-documents"
+    },
+    "resultsContainerName": {
+      "value": "results"
+    },
+    "tags": {
+      "value": {
+        "Project": "DocumentIntelligence",
+        "ManagedBy": "Bicep",
+        "Environment": "dev",
+        "SupportedFormats": "pdf,docx,xlsx,pptx,images,html,txt"
+      }
+    }
+  }
+}

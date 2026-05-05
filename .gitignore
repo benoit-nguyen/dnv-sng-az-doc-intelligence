@@ -1,0 +1,86 @@
+.venv/
+venv/
+ENV/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Environment
+.env*
+!.env.template
+!.env.example
+*.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+logs/
+*.log
+
+# Test
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Temporary
+*.tmp
+temp/
+.temp/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Azure
+.azure/
+local.settings.json
+
+# Results
+results/
+results_output/
+output/
+*.ocr.json
+*_analysis.json
+*_analysis.md
+*_translated.*
+*_en.pdf
+recreated_pdfs*/
+
+# Release/package artifacts
+release/
+*.exe
+*.msi
+*.blockmap
+latest.yml
+
+# Local document samples
+doc-input/
+to be deleted/
+*.pdf
+*.docx
+*.xlsx
+*.pptx
+*.png
+*.jpg
+*.jpeg
+*.tiff
+*.bmp
+
+# Uploads
+uploads/

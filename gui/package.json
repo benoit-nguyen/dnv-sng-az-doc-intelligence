@@ -1,0 +1,62 @@
+{
+  "name": "doc-intelligence-gui",
+  "version": "1.0.1",
+  "description": "GUI for Azure Document Intelligence Batch Processor with Translation",
+  "main": "src/main/main.js",
+  "scripts": {
+    "dev": "concurrently \"vite\" \"wait-on http://localhost:5174 && cross-env NODE_ENV=development npx electron .\"",
+    "build:backend": "powershell -ExecutionPolicy Bypass -File ../scripts/build_backend.ps1",
+    "build": "npm run build:backend && vite build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder",
+    "start": "npx electron .",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "build": {
+    "appId": "com.dnv.doc-intelligence-gui",
+    "productName": "Document Intelligence Processor",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "dnv-internal",
+        "repo": "dnv-sng-az-doc-intelligence"
+      }
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "src/main/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/backend",
+        "to": "backend",
+        "filter": [
+          "docprocessor.exe"
+        ]
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "signAndEditExecutable": false
+    }
+  },
+  "keywords": ["azure", "document-intelligence", "translation", "batch-processing"],
+  "author": "DNV",
+  "license": "ISC",
+  "dependencies": {
+    "concurrently": "^9.2.1",
+    "cross-env": "^7.0.3",
+    "dotenv": "^17.2.3",
+    "wait-on": "^8.0.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.1",
+    "electron-builder": "^26.0.12",
+    "vite": "^5.0.11",
+    "electron": "^28.1.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  }
+}
