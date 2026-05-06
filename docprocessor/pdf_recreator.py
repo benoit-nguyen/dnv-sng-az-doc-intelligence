@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
 
 import requests
-import urllib3
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import inch
@@ -24,8 +23,6 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 
 from .config import get_settings
-
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +63,7 @@ class AzureTranslator:
         timeout: float = 15.0,
         max_batch: int = 25,
         max_chars: int = 4500,
+        ca_bundle: Optional[str] = None,
         paths: Optional[Sequence[str]] = None,
     ) -> None:
         if not endpoint:
@@ -78,7 +76,7 @@ class AzureTranslator:
         self._region = region
         self._timeout = timeout
         self._session = requests.Session()
-        self._session.verify = False  # corporate proxy uses custom CA
+        self._session.verify = ca_bundle or True
         self._max_batch = max(1, max_batch)
         self._max_chars = max(100, max_chars)
         if paths:
@@ -633,4 +631,10 @@ def build_translator_from_settings() -> AzureTranslator:
         raise RuntimeError("TRANSLATOR_ENDPOINT and TRANSLATOR_KEY must be set in .env")
     raw_paths = os.getenv("TRANSLATOR_PATHS")
     paths = [s.strip() for s in raw_paths.split(",") if s.strip()] if raw_paths else None
-    return AzureTranslator(endpoint, key=key, region=region, paths=paths)
+    return AzureTranslator(
+        endpoint,
+        key=key,
+        region=region,
+        ca_bundle=settings.requests_ca_bundle,
+        paths=paths,
+    )

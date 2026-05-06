@@ -26,9 +26,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // Event listeners
   onProcessingProgress: (callback) => {
-    ipcRenderer.on('processing-progress', (event, data) => callback(data));
+    const listener = (event, data) => callback(data);
+    ipcRenderer.on('processing-progress', listener);
+    return () => ipcRenderer.removeListener('processing-progress', listener);
   },
   onProcessingOutput: (callback) => {
-    ipcRenderer.on('processing-output', (event, data) => callback(data));
+    const listener = (event, data) => callback(data);
+    ipcRenderer.on('processing-output', listener);
+    return () => ipcRenderer.removeListener('processing-output', listener);
   }
 });

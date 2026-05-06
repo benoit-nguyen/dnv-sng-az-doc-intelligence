@@ -99,6 +99,12 @@ class Settings(BaseSettings):
         default=1, description="Initial retry wait time"
     )
 
+    # Network security
+    requests_ca_bundle: Optional[str] = Field(
+        default=None,
+        description="Optional CA bundle path for corporate TLS interception/proxy environments",
+    )
+
     # Optional Services (Phase 2+)
     translator_endpoint: Optional[str] = Field(
         default=None, description="Azure Translator endpoint"

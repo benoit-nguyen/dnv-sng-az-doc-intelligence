@@ -15,8 +15,6 @@ from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
 import requests
-import urllib3
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 from azure.core.exceptions import ResourceExistsError
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient, ContentSettings
@@ -55,7 +53,7 @@ class TranslationPipeline:
 
         self._endpoint = self.settings.translator_endpoint.rstrip("/") + "/translate"
         self._session = requests.Session()
-        self._session.verify = False  # corporate proxy uses custom CA
+        self._session.verify = self.settings.requests_ca_bundle or True
 
         # Reuse a single managed identity credential when API key is not supplied.
         self._identity_credential: Optional[DefaultAzureCredential] = None

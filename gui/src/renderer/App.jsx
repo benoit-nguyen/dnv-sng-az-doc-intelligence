@@ -159,14 +159,19 @@ function App() {
     loadAppVersion();
     
     // Set up event listeners
-    window.electronAPI.onProcessingProgress((data) => {
+    const removeProgressListener = window.electronAPI.onProcessingProgress((data) => {
       setCurrentStep(data.step);
       addLog(data.message, 'info');
     });
 
-    window.electronAPI.onProcessingOutput((data) => {
+    const removeOutputListener = window.electronAPI.onProcessingOutput((data) => {
       addProcessOutput(data.data, data.type);
     });
+
+    return () => {
+      removeProgressListener?.();
+      removeOutputListener?.();
+    };
   }, []);
 
   const loadAppVersion = async () => {

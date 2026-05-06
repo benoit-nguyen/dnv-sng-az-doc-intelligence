@@ -1,6 +1,8 @@
 {
-  "version": "1.0.2",
-  "installerUrl": "https://github.com/benoit-nguyen/dnv-sng-az-doc-intelligence/releases/download/v1.0.2/Document%20Intelligence%20Processor%20Setup%201.0.2.exe",
-  "releaseNotesUrl": "https://github.com/benoit-nguyen/dnv-sng-az-doc-intelligence/releases/tag/v1.0.2",
-  "notes": "Version 1.0.2 uses the GitHub-hosted update manifest by default and includes the update button, secure local Azure settings, and PDF translation through Document Intelligence layout analysis."
+  "version": "1.0.3",
+  "installerUrl": "https://github.com/benoit-nguyen/dnv-sng-az-doc-intelligence/releases/download/v1.0.3/Document%20Intelligence%20Processor%20Setup%201.0.3.exe",
+  "releaseNotesUrl": "https://github.com/benoit-nguyen/dnv-sng-az-doc-intelligence/releases/tag/v1.0.3",
+  "sha256": "3B73F5DA03AB1C23FBA24EEAF7B8078D6617150199CE5805E275D473C33224B1",
+  "sha512": "oP48iM4hOj0xVcmp+AUAx4emTKw+21p4e6sBW4UFSaf8s/JZABMoKoHGWKbHDcdIzNTPLxNlDvs1uHgMi5SLoQ==",
+  "notes": "Version 1.0.3 hardens TLS verification, update URL validation, Electron browser settings, backend environment handling, and dependency audit posture."
 }

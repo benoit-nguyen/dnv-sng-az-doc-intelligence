@@ -13,12 +13,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import requests
-import certifi
 from azure.ai.documentintelligence import DocumentIntelligenceClient
 from azure.identity import DefaultAzureCredential
 from azure.core.credentials import AzureKeyCredential
 from tenacity import retry, stop_after_attempt, wait_exponential
-import urllib3
 
 from .config import get_settings
 from .pdf_recreator import (
@@ -26,9 +24,6 @@ from .pdf_recreator import (
     create_pdf_from_analysis,
     translate_analysis_content,
 )
-
-# Disable SSL warnings for development (Windows SSL cert issues)
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +55,7 @@ class AzureTranslator:
         """Initialize Azure Translator client."""
         self.settings = get_settings()
         self.endpoint = self.settings.translator_endpoint
+        self.verify_tls = self.settings.requests_ca_bundle or True
         
         if not self.endpoint:
             raise ValueError(
@@ -173,15 +169,13 @@ class AzureTranslator:
             # Get fresh auth headers for each request
             headers = self._get_auth_headers()
             
-            # Note: SSL verification disabled for development on Windows
-            # For production, ensure Python has proper SSL certificates installed
             response = requests.post(
                 self.translate_url,
                 params=params,
                 headers=headers,
                 json=body,
                 timeout=30,
-                verify=False  # Disable SSL verification (dev only)
+                verify=self.verify_tls,
             )
             response.raise_for_status()
             
@@ -236,15 +230,13 @@ class AzureTranslator:
                 # Get fresh auth headers for each batch
                 headers = self._get_auth_headers()
                 
-                # Note: SSL verification disabled for development on Windows
-                # For production, ensure Python has proper SSL certificates installed
                 response = requests.post(
                     self.translate_url,
                     params=params,
                     headers=headers,
                     json=body,
                     timeout=60,
-                    verify=False  # Disable SSL verification (dev only)
+                    verify=self.verify_tls,
                 )
                 response.raise_for_status()
                 
@@ -413,6 +405,7 @@ class AzureDocumentFileTranslator:
         self.key = self.settings.translator_key
         self.region = self.settings.translator_region
         self.doc_endpoint = self._build_document_translation_endpoint(self.endpoint)
+        self.verify_tls = self.settings.requests_ca_bundle or True
 
     @staticmethod
     def _build_document_translation_endpoint(endpoint: str) -> str:
@@ -501,7 +494,7 @@ class AzureDocumentFileTranslator:
                 "document": (file_path.name, document_file, content_type)
             }
             
-            response = requests.post(url, headers=headers, files=files, timeout=300, verify=False)
+            response = requests.post(url, headers=headers, files=files, timeout=300, verify=self.verify_tls)
             
         if response.status_code != 200:
             raise Exception(f"Translation failed: {response.status_code} - {response.text}")

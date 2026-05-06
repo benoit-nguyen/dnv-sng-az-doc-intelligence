@@ -1,6 +1,6 @@
 {
   "name": "doc-intelligence-gui",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "GUI for Azure Document Intelligence Batch Processor with Translation",
   "main": "src/main/main.js",
   "scripts": {
@@ -42,21 +42,26 @@
       "signAndEditExecutable": false
     }
   },
-  "keywords": ["azure", "document-intelligence", "translation", "batch-processing"],
+  "keywords": [
+    "azure",
+    "document-intelligence",
+    "translation",
+    "batch-processing"
+  ],
   "author": "DNV",
   "license": "ISC",
   "dependencies": {
-    "concurrently": "^9.2.1",
-    "cross-env": "^7.0.3",
-    "dotenv": "^17.2.3",
-    "wait-on": "^8.0.1"
+    "dotenv": "^17.2.3"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",
+    "concurrently": "^9.2.1",
+    "cross-env": "^7.0.3",
+    "electron": "^42.0.0",
     "electron-builder": "^26.0.12",
-    "vite": "^5.0.11",
-    "electron": "^28.1.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "vite": "^8.0.10",
+    "wait-on": "^8.0.1"
   }
 }

@@ -86,6 +86,8 @@ https://raw.githubusercontent.com/benoit-nguyen/dnv-sng-az-doc-intelligence/main
 
 If a different update source is needed, host a small JSON manifest at an accessible HTTPS URL and set `DOC_PROCESSOR_UPDATE_MANIFEST_URL` before building the installer. Do not embed private GitHub tokens in the app.
 
+The app only accepts update links that point to this repository's trusted GitHub release or raw manifest locations.
+
 Example manifest:
 
 ```json
@@ -98,6 +100,10 @@ Example manifest:
 ```
 
 For each new release, increment `version` in `package.json`, run `npm run build`, upload the new installer, then update the manifest.
+
+## Corporate TLS Certificates
+
+HTTPS certificate validation is enabled for Azure requests. If your company network uses TLS inspection, set `REQUESTS_CA_BUNDLE` to a PEM certificate bundle path in `.env` or in the packaged app environment before running translations.
 
 ### Start Production App
 

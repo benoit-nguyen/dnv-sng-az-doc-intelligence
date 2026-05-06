@@ -49,6 +49,8 @@ const REQUIRED_CONFIG_KEYS = [
 
 const DEFAULT_UPDATE_MANIFEST_URL = 'https://raw.githubusercontent.com/benoit-nguyen/dnv-sng-az-doc-intelligence/main/update-manifest.json';
 const DEFAULT_UPDATE_RELEASES_URL = 'https://github.com/benoit-nguyen/dnv-sng-az-doc-intelligence/releases/latest';
+const TRUSTED_GITHUB_OWNER = 'benoit-nguyen';
+const TRUSTED_GITHUB_REPO = 'dnv-sng-az-doc-intelligence';
 
 function getUpdateManifestUrl() {
   return process.env.DOC_PROCESSOR_UPDATE_MANIFEST_URL || DEFAULT_UPDATE_MANIFEST_URL;
@@ -86,12 +88,39 @@ async function fetchUpdateManifest() {
     return null;
   }
 
+  validateUpdateUrl(manifestUrl, { allowRawManifest: true });
+
   const response = await fetch(manifestUrl, { cache: 'no-store' });
   if (!response.ok) {
     throw new Error(`Update check failed: ${response.status} ${response.statusText}`);
   }
 
   return response.json();
+}
+
+function validateUpdateUrl(value, options = {}) {
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error('Update URL is not a valid URL.');
+  }
+
+  if (parsed.protocol !== 'https:') {
+    throw new Error('Update URL must use HTTPS.');
+  }
+
+  const githubReleasePath = `/${TRUSTED_GITHUB_OWNER}/${TRUSTED_GITHUB_REPO}/releases/`;
+  if (parsed.hostname === 'github.com' && parsed.pathname.startsWith(githubReleasePath)) {
+    return parsed.toString();
+  }
+
+  const rawManifestPath = `/${TRUSTED_GITHUB_OWNER}/${TRUSTED_GITHUB_REPO}/main/update-manifest.json`;
+  if (options.allowRawManifest && parsed.hostname === 'raw.githubusercontent.com' && parsed.pathname === rawManifestPath) {
+    return parsed.toString();
+  }
+
+  throw new Error('Update URL must point to the trusted GitHub release or manifest location.');
 }
 
 function getSecureConfigPath() {
@@ -173,9 +202,28 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
       preload: path.join(__dirname, 'preload.js')
     },
     icon: path.join(__dirname, '../renderer/assets/icon.png')
+  });
+
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    try {
+      validateUpdateUrl(url);
+      return { action: 'allow' };
+    } catch {
+      return { action: 'deny' };
+    }
+  });
+
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const allowedDevUrl = process.env.NODE_ENV === 'development' && url.startsWith('http://localhost:5174');
+    if (!allowedDevUrl && url !== mainWindow.webContents.getURL()) {
+      event.preventDefault();
+    }
   });
 
   // Load the app
@@ -282,13 +330,14 @@ async function getFilesRecursively(dir, fileList = [], baseDir = dir) {
 async function executePythonCommand(args, onProgress) {
   await applySecureConfigToEnvironment();
   const runtime = getRuntimeCommand(args);
+  const backendEnv = buildBackendEnvironment();
 
   return new Promise((resolve, reject) => {
     processingCancelled = false;
     
     const pythonProcess = spawn(runtime.command, runtime.args, {
       cwd: runtime.cwd,
-      env: { ...process.env, PYTHONIOENCODING: 'utf-8', NO_COLOR: '1' }
+      env: backendEnv,
     });
 
     let outputBuffer = '';
@@ -327,6 +376,58 @@ async function executePythonCommand(args, onProgress) {
     // Store reference to allow cancellation
     mainWindow.pythonProcess = pythonProcess;
   });
+}
+
+function buildBackendEnvironment() {
+  const allowedKeys = [
+    ...CONFIG_KEYS,
+    'AZURE_SUBSCRIPTION_ID',
+    'AZURE_RESOURCE_GROUP',
+    'AZURE_LOCATION',
+    'STORAGE_ACCOUNT_NAME',
+    'STORAGE_CONTAINER_SOURCE',
+    'STORAGE_CONTAINER_RESULTS',
+    'STORAGE_CONTAINER_TRANSLATIONS',
+    'STORAGE_CONNECTION_STRING',
+    'KEY_VAULT_NAME',
+    'KEY_VAULT_URI',
+    'BATCH_SIZE_LIMIT',
+    'SUPPORTED_FORMATS',
+    'MAX_FILE_SIZE_MB',
+    'PARALLEL_UPLOAD_WORKERS',
+    'BLOB_MAX_BLOCK_SIZE',
+    'BLOB_MAX_SINGLE_PUT_SIZE',
+    'BLOB_UPLOAD_CONCURRENCY',
+    'LOG_LEVEL',
+    'LOG_FILE',
+    'RETRY_MAX_ATTEMPTS',
+    'RETRY_BACKOFF_FACTOR',
+    'RETRY_INITIAL_WAIT_SECONDS',
+    'TRANSLATION_DEFAULT_LOCALES',
+    'TRANSLATION_OVERWRITE_EXISTING',
+    'TRANSLATION_MAX_CHARS_PER_REQUEST',
+    'TRANSLATION_REQUEST_BATCH_SIZE',
+    'REQUESTS_CA_BUNDLE',
+    'SSL_CERT_FILE',
+  ];
+
+  const env = {
+    SystemRoot: process.env.SystemRoot,
+    PATH: process.env.PATH,
+    TEMP: process.env.TEMP,
+    TMP: process.env.TMP,
+    USERPROFILE: process.env.USERPROFILE,
+    PYTHONIOENCODING: 'utf-8',
+    NO_COLOR: '1',
+  };
+
+  for (const key of allowedKeys) {
+    if (process.env[key]) {
+      env[key] = process.env[key];
+    }
+  }
+
+  return env;
 }
 
 // Process documents with Azure Document Translation and save beside originals
@@ -467,6 +568,8 @@ ipcMain.handle('check-for-updates', async () => {
     const latestVersion = manifest.version || manifest.latestVersion;
     const downloadUrl = manifest.installerUrl || manifest.downloadUrl || releasesUrl;
     const releaseNotesUrl = manifest.releaseNotesUrl || releasesUrl;
+    validateUpdateUrl(downloadUrl);
+    validateUpdateUrl(releaseNotesUrl);
     const updateAvailable = latestVersion ? compareVersions(latestVersion, currentVersion) > 0 : false;
 
     return {
@@ -476,6 +579,8 @@ ipcMain.handle('check-for-updates', async () => {
       updateAvailable,
       downloadUrl,
       releaseNotesUrl,
+      sha256: manifest.sha256 || '',
+      sha512: manifest.sha512 || '',
       notes: manifest.notes || '',
       message: updateAvailable
         ? `Version ${latestVersion} is available.`
@@ -495,7 +600,7 @@ ipcMain.handle('check-for-updates', async () => {
 
 ipcMain.handle('open-update-url', async (event, url) => {
   const target = url || getUpdateReleasesUrl();
-  await shell.openExternal(target);
+  await shell.openExternal(validateUpdateUrl(target));
   return { success: true };
 });
 
