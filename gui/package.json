@@ -1,6 +1,6 @@
 {
   "name": "doc-intelligence-gui",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "GUI for Azure Document Intelligence Batch Processor with Translation",
   "main": "src/main/main.js",
   "scripts": {
@@ -38,7 +38,10 @@
       }
     ],
     "win": {
-      "target": "nsis",
+      "target": [
+        "nsis",
+        "portable"
+      ],
       "signAndEditExecutable": false
     }
   },
