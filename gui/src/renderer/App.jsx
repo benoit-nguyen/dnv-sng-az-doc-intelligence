@@ -179,6 +179,14 @@ function App() {
     setAppVersion(result.version);
   };
 
+  const clearAzureConfigurationMessages = () => {
+    setError('');
+    setLogs(prev => prev.filter(log => ![
+      'Azure configuration incomplete',
+      'Could not save Azure settings',
+    ].includes(log.title)));
+  };
+
   const checkAzureConfiguration = async () => {
     const result = await window.electronAPI.checkAzureConfig();
     setAzureConfigured(result.configured);
@@ -188,14 +196,15 @@ function App() {
       addLog({
         type: 'error',
         title: 'Azure configuration incomplete',
-        message: 'Please configure the missing values in your .env file.',
+        message: 'Please configure the missing values in Azure Settings.',
         detail: result.missing.join(', '),
       });
     } else {
+      clearAzureConfigurationMessages();
       addLog({
         type: 'success',
         title: 'Azure configured',
-        message: 'Translator endpoint and key are available.',
+        message: 'Translator and Document Intelligence settings are available.',
       });
     }
   };
@@ -233,6 +242,7 @@ function App() {
         TRANSLATOR_KEY: '',
         DOCUMENT_INTELLIGENCE_KEY: '',
       }));
+      clearAzureConfigurationMessages();
       addLog({
         type: 'success',
         title: 'Azure settings saved',
@@ -352,7 +362,7 @@ function App() {
 
   const handleProcess = async () => {
     if (!azureConfigured) {
-      setError('Please configure Azure credentials in .env file');
+      setError('Please configure Azure credentials in Azure Settings');
       return;
     }
 

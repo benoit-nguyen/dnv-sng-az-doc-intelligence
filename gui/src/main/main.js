@@ -47,6 +47,12 @@ const REQUIRED_CONFIG_KEYS = [
   'DOCUMENT_INTELLIGENCE_KEY',
 ];
 
+const DEFAULT_AZURE_CONFIG = {
+  TRANSLATOR_ENDPOINT: 'https://az-document-translator.cognitiveservices.azure.com/',
+  TRANSLATOR_REGION: 'southeastasia',
+  DOCUMENT_INTELLIGENCE_ENDPOINT: 'https://az-file-management-intelligence.cognitiveservices.azure.com/',
+};
+
 const DEFAULT_UPDATE_MANIFEST_URL = 'https://raw.githubusercontent.com/benoit-nguyen/dnv-sng-az-doc-intelligence/main/update-manifest.json';
 const DEFAULT_UPDATE_RELEASES_URL = 'https://github.com/benoit-nguyen/dnv-sng-az-doc-intelligence/releases/latest';
 const TRUSTED_GITHUB_OWNER = 'benoit-nguyen';
@@ -127,6 +133,14 @@ function getSecureConfigPath() {
   return path.join(app.getPath('userData'), 'azure-config.secure.json');
 }
 
+function applyDefaultAzureConfigToEnvironment() {
+  for (const [key, value] of Object.entries(DEFAULT_AZURE_CONFIG)) {
+    if (!process.env[key]) {
+      process.env[key] = value;
+    }
+  }
+}
+
 function encryptValue(value) {
   if (!value) return '';
   if (!safeStorage.isEncryptionAvailable()) {
@@ -167,6 +181,7 @@ async function writeSecureConfig(config) {
 }
 
 async function applySecureConfigToEnvironment() {
+  applyDefaultAzureConfigToEnvironment();
   const config = await readSecureConfig();
   for (const [key, value] of Object.entries(config)) {
     if (value) {
@@ -511,7 +526,7 @@ ipcMain.handle('check-azure-config', async () => {
 ipcMain.handle('get-azure-config', async () => {
   await applySecureConfigToEnvironment();
   const secureConfig = await readSecureConfig();
-  const source = Object.values(secureConfig).some(Boolean) ? 'secure-store' : (!app.isPackaged ? '.env' : 'none');
+  const source = Object.values(secureConfig).some(Boolean) ? 'secure-store' : (!app.isPackaged ? '.env' : 'built-in defaults');
 
   return {
     source,
@@ -526,21 +541,30 @@ ipcMain.handle('get-azure-config', async () => {
 });
 
 ipcMain.handle('save-azure-config', async (event, values) => {
-  const existing = {
-    ...process.env,
-    ...(await readSecureConfig()),
-  };
+  try {
+    applyDefaultAzureConfigToEnvironment();
 
-  const nextConfig = {};
-  for (const key of CONFIG_KEYS) {
-    const value = typeof values[key] === 'string' ? values[key].trim() : '';
-    nextConfig[key] = value || existing[key] || '';
+    const existing = {
+      ...process.env,
+      ...(await readSecureConfig()),
+    };
+
+    const nextConfig = {};
+    for (const key of CONFIG_KEYS) {
+      const value = typeof values[key] === 'string' ? values[key].trim() : '';
+      nextConfig[key] = value || existing[key] || '';
+    }
+
+    await writeSecureConfig(nextConfig);
+    await applySecureConfigToEnvironment();
+
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message || 'Could not save Azure settings.',
+    };
   }
-
-  await writeSecureConfig(nextConfig);
-  await applySecureConfigToEnvironment();
-
-  return { success: true };
 });
 
 ipcMain.handle('get-app-version', async () => ({

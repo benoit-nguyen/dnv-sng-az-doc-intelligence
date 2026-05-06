@@ -1,8 +1,8 @@
 {
-  "version": "1.0.4",
-  "installerUrl": "https://github.com/benoit-nguyen/dnv-sng-az-doc-intelligence/releases/download/v1.0.4/Document%20Intelligence%20Processor%20Setup%201.0.4.exe",
-  "releaseNotesUrl": "https://github.com/benoit-nguyen/dnv-sng-az-doc-intelligence/releases/tag/v1.0.4",
-  "sha256": "F5FDBEB062BA5324525FF28FCC183A3CB6081D3136ABC16AA073388BDE65E914",
-  "sha512": "EFQMKHtieDiCjGEn1dr/m0fRrtdRm3zzBYu5GeppjbCpYPZad2x9V+WoGhSC6P6+z6rFIlWOjXAMIhmriRLLWw==",
-  "notes": "Version 1.0.4 adds a portable no-install Windows executable alongside the standard installer for easier testing on managed machines."
+  "version": "1.0.5",
+  "installerUrl": "https://github.com/benoit-nguyen/dnv-sng-az-doc-intelligence/releases/download/v1.0.5/Document%20Intelligence%20Processor%20Setup%201.0.5.exe",
+  "releaseNotesUrl": "https://github.com/benoit-nguyen/dnv-sng-az-doc-intelligence/releases/tag/v1.0.5",
+  "sha256": "3C80D62D3E9FDEAA5105548811D5B18DC0D3D3A62F10A3C842C01AD50A6F53A4",
+  "sha512": "n2NynE4INCxddUngnFh4T08b2jmCbVifCFrN6ekKWTFf/eQ4O+RSD6IMrnUEnRvEzYPCm3DF67n8LHA5dRq8iw==",
+  "notes": "Version 1.0.5 pre-fills non-secret Azure endpoints, keeps keys blank, improves Azure settings save error handling, and clears stale Azure configuration errors after successful setup."
 }
