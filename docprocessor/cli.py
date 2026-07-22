@@ -10,6 +10,7 @@ Provides commands for:
 """
 
 import json
+import os
 import sys
 from pathlib import Path
 from typing import List, Optional
@@ -25,7 +26,6 @@ from .scanner import DocumentScanner
 from .uploader import BlobUploader
 from .translation import TranslationPipeline
 from .translator import AzureDocumentFileTranslator
-from .translator import DOCUMENT_TRANSLATION_EXTENSIONS
 from .pdf_recreator import (
     AzureTranslator,
     build_translator_from_settings,
@@ -39,7 +39,55 @@ app = typer.Typer(
     help="Azure Document Intelligence Batch Processor CLI",
     add_completion=False,
 )
-console = Console()
+
+
+def _configure_stdio_for_windows() -> None:
+    """Best-effort UTF-8 stdio setup to avoid codepage write failures."""
+
+    if sys.platform != "win32":
+        return
+
+    os.environ.setdefault("PYTHONUTF8", "1")
+    os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            try:
+                reconfigure(encoding="utf-8", errors="replace")
+            except Exception:
+                # Keep existing stream settings when reconfigure is unavailable.
+                pass
+
+
+def _is_utf_stream(stream) -> bool:
+    encoding = (getattr(stream, "encoding", "") or "").lower()
+    return "utf" in encoding
+
+
+_configure_stdio_for_windows()
+
+FORCE_ASCII_OUTPUT = os.environ.get("DOCPROCESSOR_ASCII", "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+ASCII_ONLY_OUTPUT = FORCE_ASCII_OUTPUT or not (
+    _is_utf_stream(sys.stdout) and _is_utf_stream(sys.stderr)
+)
+
+console = Console(emoji=not ASCII_ONLY_OUTPUT)
+
+
+def _progress_columns():
+    if ASCII_ONLY_OUTPUT:
+        return (TextColumn("[progress.description]{task.description}"),)
+    return (SpinnerColumn(), TextColumn("[progress.description]{task.description}"))
+
+
+def _status_ok() -> str:
+    return "OK"
 
 
 @app.command()
@@ -66,8 +114,7 @@ def scan(
     scanner = DocumentScanner()
     
     with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
+        *_progress_columns(),
         console=console,
     ) as progress:
         task = progress.add_task("Scanning...", total=None)
@@ -212,8 +259,7 @@ def analyze(
     with DocumentIntelligenceAnalyzer() as analyzer:
         # Start batch analysis
         with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
+            *_progress_columns(),
             console=console,
         ) as progress:
             task = progress.add_task("Submitting batch request...", total=None)
@@ -300,7 +346,6 @@ def status(
 def translate_file(
     file_path: Path = typer.Argument(..., help="Path to the PDF file to translate directly"),
     target_language: str = typer.Option("en", "--to", "-t", help="Target language code"),
-    overwrite: bool = typer.Option(False, "--overwrite", help="Overwrite an existing translated file"),
 ):
     """
     Translates a document directly using Azure Document Translation.
@@ -315,137 +360,16 @@ def translate_file(
         translator = AzureDocumentFileTranslator()
         
         with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
+            *_progress_columns(),
             console=console
         ) as progress:
             progress.add_task(description=f"Translating {file_path.name} to '{target_language}'...", total=None)
             
-            output = translator.translate_document(file_path, target_language, overwrite=overwrite)
+            output = translator.translate_document(file_path, target_language)
             
         console.print(f"\n[bold green]Translation complete![/bold green] \nPreserved formatting document saved at [cyan]{output}[/cyan]")
     except Exception as e:
         console.print(f"\n[bold red]Translation Error:[/bold red] {e}")
-        raise typer.Exit(1)
-
-
-def _collect_translatable_files(
-    paths: List[Path],
-    recursive: bool,
-    target_language: str,
-    skip_existing_translations: bool,
-) -> tuple[List[Path], List[Path]]:
-    files: List[Path] = []
-    skipped: List[Path] = []
-
-    for input_path in paths:
-        path = Path(input_path).resolve()
-        if not path.exists():
-            skipped.append(path)
-            continue
-
-        candidates: List[Path]
-        if path.is_dir():
-            iterator = path.rglob("*") if recursive else path.glob("*")
-            candidates = [candidate for candidate in iterator if candidate.is_file()]
-        else:
-            candidates = [path]
-
-        for candidate in candidates:
-            if candidate.suffix.lower() not in DOCUMENT_TRANSLATION_EXTENSIONS:
-                skipped.append(candidate)
-                continue
-            if skip_existing_translations and candidate.stem.lower().endswith(
-                f"_{target_language.lower()}"
-            ):
-                skipped.append(candidate)
-                continue
-            files.append(candidate)
-
-    return sorted(dict.fromkeys(files)), sorted(dict.fromkeys(skipped))
-
-
-@app.command(name="translate-paths")
-def translate_paths(
-    paths: List[Path] = typer.Argument(
-        ..., help="One or more files or folders to translate in place"
-    ),
-    target_language: str = typer.Option("en", "--to", "-t", help="Target language code"),
-    recursive: bool = typer.Option(True, "--recursive/--no-recursive", help="Scan folders recursively"),
-    overwrite: bool = typer.Option(False, "--overwrite", help="Overwrite existing translated files"),
-    skip_existing_translations: bool = typer.Option(
-        True,
-        "--skip-existing-translations/--include-existing-translations",
-        help="Skip files already named with the target language suffix",
-    ),
-):
-    """
-    Translate selected files or folders to a target language and save outputs beside originals.
-
-    Output files use the pattern <original>_<language><extension>, for example
-    report.pdf -> report_en.pdf.
-    """
-    console.print(f"\n[bold cyan]Collecting documents for translation...[/bold cyan]")
-
-    files, skipped = _collect_translatable_files(
-        paths,
-        recursive=recursive,
-        target_language=target_language,
-        skip_existing_translations=skip_existing_translations,
-    )
-
-    if not files:
-        console.print("[yellow]No supported documents found to translate.[/yellow]")
-        if skipped:
-            console.print(f"Skipped {len(skipped)} unsupported or unavailable item(s).")
-        console.print()
-        raise typer.Exit(0)
-
-    console.print(f"Found {len(files)} supported document(s).")
-    if skipped:
-        console.print(f"Skipping {len(skipped)} unsupported, unavailable, or already translated item(s).")
-
-    translator = AzureDocumentFileTranslator()
-    results = []
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        console=console,
-    ) as progress:
-        task = progress.add_task("Translating documents...", total=None)
-        for index, file_path in enumerate(files, start=1):
-            progress.update(task, description=f"[{index}/{len(files)}] Translating {file_path.name}...")
-            results.extend(
-                translator.translate_documents(
-                    [file_path],
-                    target_language=target_language,
-                    overwrite=overwrite,
-                )
-            )
-        progress.update(task, completed=True)
-
-    succeeded = [result for result in results if result.success]
-    failed = [result for result in results if not result.success]
-
-    table = Table(title="Bulk Translation Summary")
-    table.add_column("Source", style="cyan")
-    table.add_column("Status")
-    table.add_column("Output / Error")
-
-    for result in results:
-        if result.success:
-            table.add_row(str(result.source_path), "[green]succeeded[/green]", str(result.output_path))
-        else:
-            table.add_row(str(result.source_path), "[red]failed[/red]", result.error or "Unknown error")
-
-    console.print()
-    console.print(table)
-    console.print(
-        f"\n[bold green]{len(succeeded)} translated[/bold green], "
-        f"[bold red]{len(failed)} failed[/bold red], {len(skipped)} skipped\n"
-    )
-
-    if failed:
         raise typer.Exit(1)
 
 
@@ -473,8 +397,7 @@ def download(
     with ResultsProcessor() as processor:
         # Download all results
         with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
+            *_progress_columns(),
             console=console,
         ) as progress:
             task = progress.add_task("Downloading and parsing results...", total=None)
@@ -498,7 +421,7 @@ def download(
                 source_name = Path(doc_result.source_file).stem
                 md_file = markdown_dir / f"{source_name}.md"
                 processor.export_to_markdown(doc_result, md_file)
-                console.print(f"  ✓ {md_file.name}")
+                console.print(f"  {_status_ok()} {md_file.name}")
         
         # Export tables to CSV
         if export_csv:
@@ -512,7 +435,7 @@ def download(
                     csv_files = processor.export_tables_to_csv(doc_result, csv_dir)
                     total_tables += len(csv_files)
                     for csv_file in csv_files:
-                        console.print(f"  ✓ {csv_file.name}")
+                        console.print(f"  {_status_ok()} {csv_file.name}")
             
             console.print(f"\n[green]Exported {total_tables} tables[/green]")
         
@@ -655,7 +578,7 @@ def recreate_pdf(
                 ok += 1
             except Exception as exc:
                 console.print(f"  [red]FAIL[/red] {jf.name}: {exc}")
-        console.print(f"\n[bold green]{ok}/{len(json_files)} PDFs created → {dest.absolute()}[/bold green]\n")
+        console.print(f"\n[bold green]{ok}/{len(json_files)} PDFs created -> {dest.absolute()}[/bold green]\n")
         return
 
     # ------------------------------------------------------------------ single
@@ -671,8 +594,7 @@ def recreate_pdf(
     console.print(f"\n[bold cyan]Recreating PDF from:[/bold cyan] {json_file.name}")
 
     with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
+        *_progress_columns(),
         console=console,
     ) as progress:
         task = progress.add_task("Loading analysis JSON...", total=None)
@@ -732,16 +654,16 @@ def run(
     4. Wait for completion (if --wait)
     5. Download and export results
     """
-    console.print(f"\n[bold cyan]═══════════════════════════════════════════[/bold cyan]")
+    console.print(f"\n[bold cyan]===========================================[/bold cyan]")
     console.print(f"[bold cyan]  Document Processing Pipeline[/bold cyan]")
-    console.print(f"[bold cyan]═══════════════════════════════════════════[/bold cyan]\n")
+    console.print(f"[bold cyan]===========================================[/bold cyan]\n")
     
     # Step 1: Scan
     console.print(f"[bold]Step 1/5: Scanning folder...[/bold]")
     scanner = DocumentScanner()
     scan_result = scanner.scan_folder(folder)
     total_size_mb = scan_result.total_size_bytes / (1024 * 1024)
-    console.print(f"[green]✓[/green] Found {scan_result.supported_files} documents ({total_size_mb:.2f} MB)\n")
+    console.print(f"[green]{_status_ok()}[/green] Found {scan_result.supported_files} documents ({total_size_mb:.2f} MB)\n")
     
     if scan_result.supported_files == 0:
         console.print("[yellow]No documents found. Exiting.[/yellow]")
@@ -751,19 +673,19 @@ def run(
     console.print(f"[bold]Step 2/5: Uploading to Azure...[/bold]")
     with BlobUploader() as uploader:
         upload_result = uploader.upload_documents(scan_result.documents)
-    console.print(f"[green]✓[/green] Uploaded {upload_result.successful}/{upload_result.total_files} files\n")
+    console.print(f"[green]{_status_ok()}[/green] Uploaded {upload_result.successful}/{upload_result.total_files} files\n")
     
     # Step 3: Start analysis
     console.print(f"[bold]Step 3/5: Starting batch analysis...[/bold]")
     with DocumentIntelligenceAnalyzer() as analyzer:
         operation_id = analyzer.start_batch_analysis(model_id=model)
-        console.print(f"[green]✓[/green] Batch started (ID: {operation_id})\n")
+        console.print(f"[green]{_status_ok()}[/green] Batch started (ID: {operation_id})\n")
         
         # Step 4: Wait if requested
         if wait:
             console.print(f"[bold]Step 4/5: Waiting for completion...[/bold]")
             result = analyzer.poll_batch_completion(operation_id, polling_interval=30)
-            console.print(f"[green]✓[/green] Analysis complete ({result.succeeded_count}/{result.total_count} succeeded)\n")
+            console.print(f"[green]{_status_ok()}[/green] Analysis complete ({result.succeeded_count}/{result.total_count} succeeded)\n")
         else:
             console.print(f"[yellow]Skipping wait. Check status with: docprocessor status {operation_id}[/yellow]\n")
             raise typer.Exit(0)
@@ -783,16 +705,25 @@ def run(
             md_file = markdown_dir / f"{source_name}.md"
             processor.export_to_markdown(doc_result, md_file)
         
-        console.print(f"[green]✓[/green] Exported {len(results)} results to {output}\n")
+        console.print(f"[green]{_status_ok()}[/green] Exported {len(results)} results to {output}\n")
     
-    console.print(f"[bold green]═══════════════════════════════════════════[/bold green]")
+    console.print(f"[bold green]===========================================[/bold green]")
     console.print(f"[bold green]  Pipeline Complete![/bold green]")
-    console.print(f"[bold green]═══════════════════════════════════════════[/bold green]\n")
+    console.print(f"[bold green]===========================================[/bold green]\n")
 
 
 def main():
     """Main entry point for CLI."""
-    app()
+    try:
+        app()
+    except UnicodeEncodeError as exc:
+        print(
+            "Terminal encoding error: the current console cannot render some output characters. "
+            "Please use UTF-8 (for example: chcp 65001) and retry.",
+            file=sys.stderr,
+        )
+        print(f"Details: {exc}", file=sys.stderr)
+        raise typer.Exit(1) from exc
 
 
 if __name__ == "__main__":

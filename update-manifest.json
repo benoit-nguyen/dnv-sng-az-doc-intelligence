@@ -1,8 +1,8 @@
 {
-  "version": "1.0.5",
-  "installerUrl": "https://github.com/benoit-nguyen/dnv-sng-az-doc-intelligence/releases/download/v1.0.5/Document%20Intelligence%20Processor%20Setup%201.0.5.exe",
-  "releaseNotesUrl": "https://github.com/benoit-nguyen/dnv-sng-az-doc-intelligence/releases/tag/v1.0.5",
-  "sha256": "3C80D62D3E9FDEAA5105548811D5B18DC0D3D3A62F10A3C842C01AD50A6F53A4",
-  "sha512": "n2NynE4INCxddUngnFh4T08b2jmCbVifCFrN6ekKWTFf/eQ4O+RSD6IMrnUEnRvEzYPCm3DF67n8LHA5dRq8iw==",
-  "notes": "Version 1.0.5 pre-fills non-secret Azure endpoints, keeps keys blank, improves Azure settings save error handling, and clears stale Azure configuration errors after successful setup."
+  "version": "1.0.6",
+  "installerUrl": "https://github.com/benoit-nguyen/dnv-sng-az-doc-intelligence/releases/download/v1.0.6/Document%20Intelligence%20Processor%20Setup%201.0.6.exe",
+  "releaseNotesUrl": "https://github.com/benoit-nguyen/dnv-sng-az-doc-intelligence/releases/tag/v1.0.6",
+  "sha256": "D2A829CCF6E6ADF37D3E4F03B7CA15A112DC0D48182CC6E1CAF239B4014B27D1",
+  "sha512": "gZcKb0nX97I2Aa/CrPH7Bl1wBD+HhnZu0l0v+OIQ3VLG/QHo69oMu8w7TfkFcaAdFuM4sOZkLIX0G9X5+DtKbQ==",
+  "notes": "Version 1.0.6 hardens Windows console encoding behavior to prevent cp932 Unicode spinner crashes during translation, adds ASCII-safe fallback output for packaged runs, and updates GUI release artifacts."
 }
