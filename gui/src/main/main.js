@@ -22,6 +22,10 @@ const fs = require('fs').promises;
 let mainWindow;
 let processingCancelled = false;
 
+const DEFAULT_UPDATE_MANIFEST_URL =
+  process.env.DOC_PROCESSOR_UPDATE_MANIFEST_URL ||
+  'https://raw.githubusercontent.com/benoit-nguyen/dnv-sng-az-doc-intelligence/main/update-manifest.json';
+
 // Path to the Python virtual environment
 const VENV_PYTHON = path.join(PROJECT_ROOT, '.venv/Scripts/python.exe');
 
@@ -59,6 +63,48 @@ app.on('activate', () => {
     createWindow();
   }
 });
+
+function isTrustedUpdateUrl(urlValue) {
+  try {
+    const parsed = new URL(urlValue);
+    if (parsed.protocol !== 'https:') {
+      return false;
+    }
+
+    if (parsed.hostname === 'raw.githubusercontent.com') {
+      return parsed.pathname.startsWith('/benoit-nguyen/dnv-sng-az-doc-intelligence/');
+    }
+
+    if (parsed.hostname === 'github.com') {
+      return parsed.pathname.startsWith('/benoit-nguyen/dnv-sng-az-doc-intelligence/');
+    }
+
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function parseVersion(versionString) {
+  return String(versionString || '')
+    .replace(/^v/i, '')
+    .split('.')
+    .map((part) => Number.parseInt(part, 10) || 0);
+}
+
+function isVersionNewer(candidate, current) {
+  const candidateParts = parseVersion(candidate);
+  const currentParts = parseVersion(current);
+  const maxLength = Math.max(candidateParts.length, currentParts.length);
+
+  for (let i = 0; i < maxLength; i += 1) {
+    const c = candidateParts[i] || 0;
+    const r = currentParts[i] || 0;
+    if (c > r) return true;
+    if (c < r) return false;
+  }
+  return false;
+}
 
 // Handle folder selection
 ipcMain.handle('select-folder', async () => {
@@ -355,6 +401,92 @@ ipcMain.handle('check-azure-config', async () => {
     configured: missing.length === 0,
     missing: missing
   };
+});
+
+ipcMain.handle('get-app-version', async () => {
+  return app.getVersion();
+});
+
+ipcMain.handle('check-for-updates', async () => {
+  try {
+    const response = await fetch(DEFAULT_UPDATE_MANIFEST_URL, {
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      return {
+        success: false,
+        updateAvailable: false,
+        message: `Update manifest request failed (${response.status})`,
+      };
+    }
+
+    const manifest = await response.json();
+    const currentVersion = app.getVersion();
+    const latestVersion = manifest.version || currentVersion;
+
+    const installerUrl = manifest.installerUrl || null;
+    const portableUrl = manifest.portableUrl || null;
+    const preferredDownloadUrl = portableUrl || installerUrl || null;
+    const releaseNotesUrl = manifest.releaseNotesUrl || null;
+
+    if (preferredDownloadUrl && !isTrustedUpdateUrl(preferredDownloadUrl)) {
+      return {
+        success: false,
+        updateAvailable: false,
+        message: 'Update manifest contained an untrusted download URL.',
+      };
+    }
+
+    if (releaseNotesUrl && !isTrustedUpdateUrl(releaseNotesUrl)) {
+      return {
+        success: false,
+        updateAvailable: false,
+        message: 'Update manifest contained an untrusted release notes URL.',
+      };
+    }
+
+    const updateAvailable = isVersionNewer(latestVersion, currentVersion);
+
+    return {
+      success: true,
+      updateAvailable,
+      currentVersion,
+      latestVersion,
+      downloadUrl: preferredDownloadUrl,
+      installerUrl,
+      portableUrl,
+      releaseNotesUrl,
+      message: updateAvailable
+        ? `Version ${latestVersion} is available.`
+        : `You are up to date (v${currentVersion}).`,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      updateAvailable: false,
+      message: `Unable to check for updates: ${error.message}`,
+    };
+  }
+});
+
+ipcMain.handle('open-update-url', async (event, url) => {
+  const { shell } = require('electron');
+  if (!url) {
+    return { success: false, error: 'No update URL provided.' };
+  }
+
+  if (!isTrustedUpdateUrl(url)) {
+    return { success: false, error: 'Blocked untrusted update URL.' };
+  }
+
+  try {
+    await shell.openExternal(url);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
 });
 
 // Open output folder
