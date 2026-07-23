@@ -3,7 +3,7 @@
   "installerUrl": "https://github.com/benoit-nguyen/dnv-sng-az-doc-intelligence/releases/download/v1.0.6/Document.Intelligence.Processor.Setup.1.0.6.exe",
   "portableUrl": "https://github.com/benoit-nguyen/dnv-sng-az-doc-intelligence/releases/download/v1.0.6/Document.Intelligence.Processor.1.0.6.exe",
   "releaseNotesUrl": "https://github.com/benoit-nguyen/dnv-sng-az-doc-intelligence/releases/tag/v1.0.6",
-  "sha256": "41C00BE606719A6F8CC03483E56E61541FCFAB349B23D432B5661DDE2824AC87",
-  "sha512": "Wy3uJ2vXx/7nVg02DgtaI3JlGfuc6dhU28CzFZgYmI2K7+hVOsBXvG/KgFpxyfEu5swVeDbICKr4DfvoFqXzmg==",
+  "sha256": "5888D6C0B96994DA47E4611AAE6F3F4CD733441ED98AAE5AB19F923201B879BE",
+  "sha512": "bc4HvvHojDDfz5INWA3+1UgL4qzCaWBXznCneapxgA7safmGXgKCshwZ3QlpCUhbC1UZHDDL7xBqr/u5WWnIuw==",
   "notes": "Version 1.0.6 hardens Windows console encoding behavior to prevent cp932 Unicode spinner crashes during translation, adds ASCII-safe fallback output for packaged runs, and updates GUI release artifacts."
 }

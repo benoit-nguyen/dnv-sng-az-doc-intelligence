@@ -14,10 +14,11 @@ if (dotenvResult.error) {
   console.log('Available env vars:', Object.keys(process.env).filter(k => k.includes('STORAGE') || k.includes('INTELLIGENCE')));
 }
 
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, safeStorage, shell } = require('electron');
 const os = require('os');
 const { spawn } = require('child_process');
 const fs = require('fs').promises;
+const fsSync = require('fs');
 
 let mainWindow;
 let processingCancelled = false;
@@ -28,6 +29,28 @@ const DEFAULT_UPDATE_MANIFEST_URL =
 
 // Path to the Python virtual environment
 const VENV_PYTHON = path.join(PROJECT_ROOT, '.venv/Scripts/python.exe');
+const PACKAGED_BACKEND = path.join(process.resourcesPath || '', 'backend', 'docprocessor.exe');
+
+const CONFIG_KEYS = [
+  'TRANSLATOR_ENDPOINT',
+  'TRANSLATOR_KEY',
+  'TRANSLATOR_REGION',
+  'DOCUMENT_INTELLIGENCE_ENDPOINT',
+  'DOCUMENT_INTELLIGENCE_KEY',
+];
+
+const REQUIRED_CONFIG_KEYS = [
+  'TRANSLATOR_ENDPOINT',
+  'TRANSLATOR_KEY',
+  'DOCUMENT_INTELLIGENCE_ENDPOINT',
+  'DOCUMENT_INTELLIGENCE_KEY',
+];
+
+const DEFAULT_AZURE_CONFIG = {
+  TRANSLATOR_ENDPOINT: 'https://az-document-translator.cognitiveservices.azure.com/',
+  TRANSLATOR_REGION: 'southeastasia',
+  DOCUMENT_INTELLIGENCE_ENDPOINT: 'https://az-file-management-intelligence.cognitiveservices.azure.com/',
+};
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -50,7 +73,136 @@ function createWindow() {
   }
 }
 
-app.whenReady().then(createWindow);
+function getSecureConfigPath() {
+  return path.join(app.getPath('userData'), 'azure-config.secure.json');
+}
+
+function applyDefaultAzureConfigToEnvironment() {
+  for (const [key, value] of Object.entries(DEFAULT_AZURE_CONFIG)) {
+    if (!process.env[key]) {
+      process.env[key] = value;
+    }
+  }
+}
+
+function encryptValue(value) {
+  if (!value) return '';
+  if (!safeStorage.isEncryptionAvailable()) {
+    throw new Error('OS credential encryption is not available on this computer.');
+  }
+  return safeStorage.encryptString(value).toString('base64');
+}
+
+function decryptValue(value) {
+  if (!value) return '';
+  try {
+    return safeStorage.decryptString(Buffer.from(value, 'base64'));
+  } catch {
+    return '';
+  }
+}
+
+async function readSecureConfig() {
+  try {
+    const raw = await fs.readFile(getSecureConfigPath(), 'utf8');
+    const encrypted = JSON.parse(raw);
+    return CONFIG_KEYS.reduce((config, key) => {
+      config[key] = decryptValue(encrypted[key]);
+      return config;
+    }, {});
+  } catch {
+    return {};
+  }
+}
+
+async function writeSecureConfig(config) {
+  const encrypted = {};
+  for (const key of CONFIG_KEYS) {
+    encrypted[key] = encryptValue(config[key] || '');
+  }
+  await fs.mkdir(path.dirname(getSecureConfigPath()), { recursive: true });
+  await fs.writeFile(getSecureConfigPath(), JSON.stringify(encrypted, null, 2), 'utf8');
+}
+
+async function applySecureConfigToEnvironment() {
+  applyDefaultAzureConfigToEnvironment();
+  const config = await readSecureConfig();
+  for (const [key, value] of Object.entries(config)) {
+    if (value) {
+      process.env[key] = value;
+    }
+  }
+  return config;
+}
+
+function getRuntimeCommand(args) {
+  if (app.isPackaged) {
+    if (!fsSync.existsSync(PACKAGED_BACKEND)) {
+      throw new Error(`Packaged backend not found: ${PACKAGED_BACKEND}`);
+    }
+    return {
+      command: PACKAGED_BACKEND,
+      args,
+      cwd: app.getPath('userData'),
+    };
+  }
+
+  return {
+    command: VENV_PYTHON,
+    args: ['-m', 'docprocessor', ...args],
+    cwd: PROJECT_ROOT,
+  };
+}
+
+function buildBackendEnvironment() {
+  const allowedKeys = [
+    ...CONFIG_KEYS,
+    'AZURE_SUBSCRIPTION_ID',
+    'AZURE_RESOURCE_GROUP',
+    'AZURE_LOCATION',
+    'STORAGE_ACCOUNT_NAME',
+    'STORAGE_CONTAINER_SOURCE',
+    'STORAGE_CONTAINER_RESULTS',
+    'STORAGE_CONTAINER_TRANSLATIONS',
+    'STORAGE_CONNECTION_STRING',
+    'KEY_VAULT_NAME',
+    'KEY_VAULT_URI',
+    'BATCH_SIZE_LIMIT',
+    'SUPPORTED_FORMATS',
+    'MAX_FILE_SIZE_MB',
+    'PARALLEL_UPLOAD_WORKERS',
+    'BLOB_MAX_BLOCK_SIZE',
+    'BLOB_MAX_SINGLE_PUT_SIZE',
+    'BLOB_UPLOAD_CONCURRENCY',
+    'LOG_LEVEL',
+    'LOG_FILE',
+    'RETRY_MAX_ATTEMPTS',
+    'RETRY_BACKOFF_FACTOR',
+    'RETRY_INITIAL_WAIT_SECONDS',
+    'REQUESTS_CA_BUNDLE',
+  ];
+
+  const backendEnv = {
+    ...process.env,
+    PYTHONIOENCODING: 'utf-8',
+    PYTHONUTF8: '1',
+    NO_COLOR: '1',
+    DOCPROCESSOR_ASCII: '1',
+  };
+
+  for (const key of allowedKeys) {
+    if (process.env[key]) {
+      backendEnv[key] = process.env[key];
+    }
+  }
+
+  return backendEnv;
+}
+
+app.whenReady().then(async () => {
+  await applySecureConfigToEnvironment();
+  createWindow();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
@@ -182,20 +334,17 @@ async function getFilesRecursively(dir, fileList = [], baseDir = dir) {
 }
 
 // Execute Python CLI command
-function executePythonCommand(args, onProgress) {
+async function executePythonCommand(args, onProgress) {
+  await applySecureConfigToEnvironment();
+  const runtime = getRuntimeCommand(args);
+  const backendEnv = buildBackendEnvironment();
+
   return new Promise((resolve, reject) => {
     processingCancelled = false;
     
-    const pythonProcess = spawn(VENV_PYTHON, ['-m', 'docprocessor', ...args], {
-      cwd: PROJECT_ROOT,
-      env: {
-        ...process.env,
-        PYTHONIOENCODING: 'utf-8',
-        PYTHONUTF8: '1',
-        NO_COLOR: '1',
-        // Force ASCII-safe status output to avoid Windows codepage crashes in packaged runs.
-        DOCPROCESSOR_ASCII: '1'
-      }
+    const pythonProcess = spawn(runtime.command, runtime.args, {
+      cwd: runtime.cwd,
+      env: backendEnv,
     });
 
     let outputBuffer = '';
@@ -383,28 +532,82 @@ ipcMain.handle('reset-cancel', async () => {
 
 // Check if Azure is configured
 ipcMain.handle('check-azure-config', async () => {
-  const requiredEnvVars = [
-    'STORAGE_ACCOUNT_NAME',
-    'DOCUMENT_INTELLIGENCE_ENDPOINT'
-  ];
+  await applySecureConfigToEnvironment();
 
-  const missing = requiredEnvVars.filter(varName => !process.env[varName]);
+  const missing = REQUIRED_CONFIG_KEYS.filter(varName => !process.env[varName]);
+  const invalid = [];
+  const translatorEndpoint = (process.env.TRANSLATOR_ENDPOINT || '').toLowerCase();
 
-  // Debug: log what we found
+  if (translatorEndpoint.includes('api.cognitive.microsofttranslator.com')) {
+    invalid.push('TRANSLATOR_ENDPOINT must be the custom domain endpoint from the Translator resource overview, not https://api.cognitive.microsofttranslator.com');
+  }
+
+  if (translatorEndpoint.includes('api.cognitive.microsoft.com')) {
+    invalid.push('TRANSLATOR_ENDPOINT must be the custom domain endpoint from the Translator resource overview, not a regional api.cognitive.microsoft.com endpoint');
+  }
+
   console.log('Environment check:', {
-    STORAGE_ACCOUNT_NAME: process.env.STORAGE_ACCOUNT_NAME ? 'Found' : 'Missing',
+    TRANSLATOR_ENDPOINT: process.env.TRANSLATOR_ENDPOINT ? 'Found' : 'Missing',
+    TRANSLATOR_KEY: process.env.TRANSLATOR_KEY ? 'Found' : 'Missing',
     DOCUMENT_INTELLIGENCE_ENDPOINT: process.env.DOCUMENT_INTELLIGENCE_ENDPOINT ? 'Found' : 'Missing',
-    envPath: path.join(__dirname, '../../../.env')
+    DOCUMENT_INTELLIGENCE_KEY: process.env.DOCUMENT_INTELLIGENCE_KEY ? 'Found' : 'Missing',
+    invalid,
+    configPath: app.isPackaged ? getSecureConfigPath() : ENV_PATH,
+    backend: app.isPackaged ? PACKAGED_BACKEND : VENV_PYTHON,
   });
 
   return {
-    configured: missing.length === 0,
-    missing: missing
+    configured: missing.length === 0 && invalid.length === 0,
+    missing: [...missing, ...invalid]
   };
 });
 
+ipcMain.handle('get-azure-config', async () => {
+  await applySecureConfigToEnvironment();
+  const secureConfig = await readSecureConfig();
+  const source = Object.values(secureConfig).some(Boolean) ? 'secure-store' : (!app.isPackaged ? '.env' : 'built-in defaults');
+
+  return {
+    source,
+    values: {
+      TRANSLATOR_ENDPOINT: process.env.TRANSLATOR_ENDPOINT || '',
+      TRANSLATOR_REGION: process.env.TRANSLATOR_REGION || '',
+      DOCUMENT_INTELLIGENCE_ENDPOINT: process.env.DOCUMENT_INTELLIGENCE_ENDPOINT || '',
+      hasTranslatorKey: Boolean(process.env.TRANSLATOR_KEY),
+      hasDocumentIntelligenceKey: Boolean(process.env.DOCUMENT_INTELLIGENCE_KEY),
+    },
+  };
+});
+
+ipcMain.handle('save-azure-config', async (event, values) => {
+  try {
+    applyDefaultAzureConfigToEnvironment();
+
+    const existing = {
+      ...process.env,
+      ...(await readSecureConfig()),
+    };
+
+    const nextConfig = {};
+    for (const key of CONFIG_KEYS) {
+      const value = typeof values[key] === 'string' ? values[key].trim() : '';
+      nextConfig[key] = value || existing[key] || '';
+    }
+
+    await writeSecureConfig(nextConfig);
+    await applySecureConfigToEnvironment();
+
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message || 'Could not save Azure settings.',
+    };
+  }
+});
+
 ipcMain.handle('get-app-version', async () => {
-  return app.getVersion();
+  return { version: app.getVersion() };
 });
 
 ipcMain.handle('check-for-updates', async () => {
@@ -472,7 +675,6 @@ ipcMain.handle('check-for-updates', async () => {
 });
 
 ipcMain.handle('open-update-url', async (event, url) => {
-  const { shell } = require('electron');
   if (!url) {
     return { success: false, error: 'No update URL provided.' };
   }
@@ -491,7 +693,6 @@ ipcMain.handle('open-update-url', async (event, url) => {
 
 // Open output folder
 ipcMain.handle('open-output-folder', async (event, folderPath) => {
-  const { shell } = require('electron');
   try {
     await shell.openPath(folderPath);
     return { success: true };
